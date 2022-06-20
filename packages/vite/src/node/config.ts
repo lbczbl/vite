@@ -825,6 +825,7 @@ export async function loadConfigFromFile(
         // bundle the config file w/ ts transforms first, write it to disk,
         // load it with native Node ESM, then delete the file.
         fs.writeFileSync(resolvedPath + '.js', bundled.code)
+        // 加时间戳，是为了让dev server重启后仍然读取最新的配置，避免缓存
         userConfig = (await dynamicImport(`${fileUrl}.js?t=${Date.now()}`))
           .default
         fs.unlinkSync(resolvedPath + '.js')

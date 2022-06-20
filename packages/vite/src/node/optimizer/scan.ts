@@ -54,10 +54,11 @@ export async function scanImports(config: ResolvedConfig): Promise<{
 
   const explicitEntryPatterns = config.optimizeDeps.entries
   const buildInput = config.build.rollupOptions?.input
-
+  // 先从 optimizeDeps.entries 寻找入口，支持 glob 语法
   if (explicitEntryPatterns) {
     entries = await globEntries(explicitEntryPatterns, config)
   } else if (buildInput) {
+    // 其次从 build.rollupOptions.input 配置中寻找，注意需要考虑数组和对象的情况
     const resolvePath = (p: string) => path.resolve(config.root, p)
     if (typeof buildInput === 'string') {
       entries = [resolvePath(buildInput)]
@@ -69,6 +70,7 @@ export async function scanImports(config: ResolvedConfig): Promise<{
       throw new Error('invalid rollupOptions.input value.')
     }
   } else {
+    // 兜底逻辑，如果没有没有进行以上配置，自动从根目录寻找
     entries = await globEntries('**/*.html', config)
   }
 
@@ -96,6 +98,7 @@ export async function scanImports(config: ResolvedConfig): Promise<{
   const deps: Record<string, string> = {}
   const missing: Record<string, string> = {}
   const container = await createPluginContainer(config)
+  // 扫描用到的 Esbuild插件
   const plugin = esbuildScanPlugin(config, container, deps, missing, entries)
 
   const { plugins = [], ...esbuildOptions } =
@@ -105,7 +108,7 @@ export async function scanImports(config: ResolvedConfig): Promise<{
     entries.map((entry) =>
       build({
         absWorkingDir: process.cwd(),
-        write: false,
+        write: false, // 表示产物不用写入磁盘
         entryPoints: [entry],
         bundle: true,
         format: 'esm',
@@ -248,8 +251,10 @@ function esbuildScanPlugin(
         async ({ path }) => {
           let raw = fs.readFileSync(path, 'utf-8')
           // Avoid matching the content of the comment
+          // 去掉注释内容，防止干扰解析过程
           raw = raw.replace(commentRE, '<!---->')
           const isHtml = path.endsWith('.html')
+          // HTML情况下会寻找 type 为module的script
           const regex = isHtml ? scriptModuleRE : scriptRE
           regex.lastIndex = 0
           let js = ''
@@ -276,6 +281,7 @@ function esbuildScanPlugin(
             }
             let loader: Loader = 'js'
             if (lang === 'ts' || lang === 'tsx' || lang === 'jsx') {
+              // 指定 esbuild 的loader
               loader = lang
             }
             const srcMatch = openTag.match(srcRE)
@@ -358,12 +364,14 @@ function esbuildScanPlugin(
           filter: /^[\w@][^:]/
         },
         async ({ path: id, importer }) => {
+          // 如果以前在 optimizeDeps.exclude 列表或者已经记录过来了，就排除
           if (moduleListContains(exclude, id)) {
             return externalUnlessEntry({ path: id })
           }
           if (depImports[id]) {
             return externalUnlessEntry({ path: id })
           }
+          // 解析路径，内部调用各个插件的 resolveId 方法进行解析
           const resolved = await resolve(id, importer)
           if (resolved) {
             if (shouldExternalizeDep(resolved, id)) {
@@ -497,11 +505,11 @@ function extractImportPaths(code: string) {
 }
 
 function shouldExternalizeDep(resolvedId: string, rawId: string): boolean {
-  // not a valid file path
+  // not a valid file path 解析之后不是一个绝对路径
   if (!path.isAbsolute(resolvedId)) {
     return true
   }
-  // virtual id
+  // virtual id import 本身就是一个绝对路径，虚拟模块（Rollup)中约定虚拟模块以`\0`开头
   if (resolvedId === rawId || resolvedId.includes('\0')) {
     return true
   }

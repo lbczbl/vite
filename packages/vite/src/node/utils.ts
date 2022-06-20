@@ -756,6 +756,7 @@ export const usingDynamicImport = typeof jest === 'undefined'
  *
  * @param file File path to import.
  */
+// new Function包裹，这就是为了避免打包工具处理这段代码
 export const dynamicImport = usingDynamicImport
   ? new Function('file', 'return import(file)')
   : require

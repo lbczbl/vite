@@ -600,7 +600,6 @@ async function buildPolyfillChunk(
       facadeToChunkMap.set(chunk.facadeModuleId, polyfillChunk.fileName)
     }
   }
-
   // add the chunk to the bundle
   bundle[polyfillChunk.name] = polyfillChunk
 }

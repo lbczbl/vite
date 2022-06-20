@@ -450,7 +450,7 @@ export async function runOptimizeDeps(
   }
 
   const start = performance.now()
-
+  // 依赖打包
   const result = await build({
     absWorkingDir: process.cwd(),
     entryPoints: Object.keys(flatIdDeps),
@@ -471,7 +471,7 @@ export async function runOptimizeDeps(
     ],
     ...esbuildOptions
   })
-
+  // 打包元信息
   const meta = result.metafile!
 
   // the paths in `meta.outputs` are relative to `process.cwd()`
@@ -775,6 +775,7 @@ function isSingleDefaultExport(exports: readonly string[]) {
 const lockfileFormats = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']
 
 export function getDepHash(config: ResolvedConfig): string {
+  // 获取 lock 文件内容
   let content = lookupFile(config.root, lockfileFormats) || ''
   // also take config into account
   // only a subset of config options that can affect dep optimization
@@ -788,6 +789,7 @@ export function getDepHash(config: ResolvedConfig): string {
       assetsInclude: config.assetsInclude,
       plugins: config.plugins.map((p) => p.name),
       optimizeDeps: {
+        // 预构建配置
         include: config.optimizeDeps?.include,
         exclude: config.optimizeDeps?.exclude,
         esbuildOptions: {
@@ -797,7 +799,7 @@ export function getDepHash(config: ResolvedConfig): string {
           )
         }
       }
-    },
+    }, // 特殊处理函数和正则类型
     (_, value) => {
       if (typeof value === 'function' || value instanceof RegExp) {
         return value.toString()
